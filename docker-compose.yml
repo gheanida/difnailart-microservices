@@ -1,0 +1,54 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    networks:
+      - difnailart-network
+
+  user-service:
+    build: ./user-service
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - RABBITMQ_HOST=rabbitmq
+    depends_on:
+      - rabbitmq
+    networks:
+      - difnailart-network
+
+  booking-service:
+    build: ./booking-service
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=development
+      - RABBITMQ_HOST=rabbitmq
+    depends_on:
+      - rabbitmq
+    networks:
+      - difnailart-network
+
+  laravel-frontend:
+    build: ./frontend-laravel
+    ports:
+      - "8000:80"
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - USER_SERVICE_URL=http://user-service:3001
+      - BOOKING_SERVICE_URL=http://booking-service:3002
+    depends_on:
+      - user-service
+      - booking-service
+    networks:
+      - difnailart-network
+
+networks:
+  difnailart-network:
+    driver: bridge

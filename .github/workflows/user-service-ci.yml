@@ -1,0 +1,89 @@
+name: User Service CI
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'user-service/**'
+      - '.github/workflows/user-service-ci.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'user-service/**'
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: user-service/package-lock.json
+
+    - name: Install dependencies
+      working-directory: ./user-service
+      run: |
+        npm ci --legacy-peer-deps
+        npm list --depth=0
+
+    - name: Run linting
+      working-directory: ./user-service
+      run: |
+        npm run lint -- --fix || echo "Linting completed (warnings allowed)"
+
+    - name: Run unit tests
+      working-directory: ./user-service
+      run: |
+        npm test -- --passWithNoTests --coverage
+      env:
+        NODE_ENV: test
+
+    - name: Build application
+      working-directory: ./user-service
+      run: npm run build
+
+    - name: Upload test coverage
+      uses: codecov/codecov-action@v3
+      with:
+        directory: ./user-service/coverage
+        flags: user-service
+        name: user-service-coverage
+
+  docker-build:
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./user-service
+        push: true
+        tags: |
+          ${{ secrets.DOCKER_USERNAME }}/difnailart-user-service:latest
+          ${{ secrets.DOCKER_USERNAME }}/difnailart-user-service:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max

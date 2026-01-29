@@ -1,0 +1,161 @@
+name: Full Stack CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:  # Manual trigger
+
+env:
+  REGISTRY: docker.io
+  IMAGE_PREFIX: difnailart
+
+jobs:
+  validate-structure:
+    name: Validate Project Structure
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Validate project structure
+      run: |
+        echo "📁 Project Structure Validation"
+        echo "================================"
+        
+        # Check required directories
+        REQUIRED_DIRS=("user-service" "booking-service" "frontend-laravel" ".github/workflows")
+        for dir in "${REQUIRED_DIRS[@]}"; do
+          if [ -d "$dir" ]; then
+            echo "✅ $dir exists"
+          else
+            echo "❌ $dir missing"
+            exit 1
+          fi
+        done
+        
+        # Check required files
+        REQUIRED_FILES=("docker-compose.yml" "user-service/package.json" "booking-service/package.json")
+        for file in "${REQUIRED_FILES[@]}"; do
+          if [ -f "$file" ]; then
+            echo "✅ $file exists"
+          else
+            echo "❌ $file missing"
+            exit 1
+          fi
+        done
+        
+        echo "✅ All validations passed!"
+
+  user-service:
+    name: User Service
+    needs: validate-structure
+    uses: ./.github/workflows/user-service-ci.yml
+    secrets: inherit
+
+  booking-service:
+    name: Booking Service
+    needs: validate-structure
+    uses: ./.github/workflows/booking-service-ci.yml
+    secrets: inherit
+
+  frontend:
+    name: Frontend
+    needs: validate-structure
+    uses: ./.github/workflows/frontend-ci.yml
+    secrets: inherit
+
+  integration-test:
+    name: Integration Tests
+    needs: [user-service, booking-service, frontend]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Start services with Docker Compose
+      run: |
+        docker-compose up -d --build
+        sleep 30  # Wait for services to start
+        
+        echo "🔍 Checking running services..."
+        docker-compose ps
+
+    - name: Run integration tests
+      run: |
+        echo "🧪 Running integration tests..."
+        
+        # Test User Service
+        echo "Testing User Service..."
+        curl -f http://localhost:3001/ || exit 1
+        
+        # Test Booking Service
+        echo "Testing Booking Service..."
+        curl -f http://localhost:3002/bookings/services || exit 1
+        
+        # Test Frontend
+        echo "Testing Frontend..."
+        curl -f http://localhost:8000/ || exit 1
+        
+        echo "✅ All integration tests passed!"
+
+    - name: Cleanup
+      if: always()
+      run: docker-compose down
+
+  deploy-preview:
+    name: Deploy Preview
+    needs: integration-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Deploy to staging (simulated)
+      run: |
+        echo "🚀 Simulating deployment to staging..."
+        echo "Services would be deployed to:"
+        echo "- User Service: https://user.staging.difnailart.com"
+        echo "- Booking Service: https://booking.staging.difnailart.com"
+        echo "- Frontend: https://staging.difnailart.com"
+        
+        # In real scenario, this would deploy to cloud provider
+        echo "✅ Deployment simulation complete"
+
+  notify:
+    name: Notify Status
+    needs: [user-service, booking-service, frontend, integration-test]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Determine workflow status
+      id: check-status
+      run: |
+        if [[ "${{ needs.user-service.result }}" == "success" && \
+              "${{ needs.booking-service.result }}" == "success" && \
+              "${{ needs.frontend.result }}" == "success" ]]; then
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "message=✅ All checks passed! Ready for deployment." >> $GITHUB_OUTPUT
+        else
+          echo "status=failure" >> $GITHUB_OUTPUT
+          echo "message=❌ Some checks failed. Please review." >> $GITHUB_OUTPUT
+        fi
+
+    - name: Send notification (simulated)
+      run: |
+        echo "📢 ${{ steps.check-status.outputs.message }}"
+        echo "Workflow URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        
+        # In real scenario, send to Slack/Teams/Email
+        # Example for Slack:
+        # - uses: slackapi/slack-github-action@v1.23.0
+        #   with:
+        #     channel-id: 'C123456'
+        #     slack-message: "${{ steps.check-status.outputs.message }}"

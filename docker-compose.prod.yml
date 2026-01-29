@@ -1,0 +1,100 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq-prod
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - difnailart-network
+
+  user-service:
+    build:
+      context: ./user-service
+      dockerfile: Dockerfile.prod
+    container_name: user-service-prod
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - PORT=3001
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - difnailart-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  booking-service:
+    build:
+      context: ./booking-service
+      dockerfile: Dockerfile.prod
+    container_name: booking-service-prod
+    restart: unless-stopped
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=production
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - PORT=3002
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - difnailart-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  laravel-frontend:
+    build:
+      context: ./frontend-laravel
+      dockerfile: Dockerfile.prod
+    container_name: frontend-prod
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - USER_SERVICE_URL=http://user-service:3001
+      - BOOKING_SERVICE_URL=http://booking-service:3002
+    depends_on:
+      - user-service
+      - booking-service
+    networks:
+      - difnailart-network
+    volumes:
+      - ./frontend-laravel/storage:/var/www/html/storage
+
+volumes:
+  rabbitmq_data:
+    driver: local
+
+networks:
+  difnailart-network:
+    driver: bridge
+    name: difnailart-network-prod
