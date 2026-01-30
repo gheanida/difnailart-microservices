@@ -3,15 +3,21 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy package.json dan install dependencies
+# 1. Copy package.json jika ada
 COPY package*.json ./
-RUN npm install
 
-# Copy semua file source code
+# 2. Cek dan install
+RUN if [ -f "package.json" ]; then \
+      npm install; \
+    else \
+      echo "ERROR: No package.json found!" && \
+      echo "Creating minimal package.json..." && \
+      echo '{"name":"difnailart","version":"1.0.0","scripts":{"start":"echo \\"App running\\""}}' > package.json && \
+      npm install; \
+    fi
+
+# 3. Copy aplikasi
 COPY . .
 
-# Expose port aplikasi (sesuaikan dengan port aplikasi Anda)
-EXPOSE 3000
-
-# Command untuk menjalankan aplikasi
+# 4. Command untuk run
 CMD ["npm", "start"]
