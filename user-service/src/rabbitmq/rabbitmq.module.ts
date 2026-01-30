@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { RabbitMQModule } from '@golevelup/nestjs-rabbitmq'; // Perbaiki typo package name
+import { RabbitMQModule } from '@golevelup/nestjs-rabbitmq'; 
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
 @Module({

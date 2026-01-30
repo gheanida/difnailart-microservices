@@ -7,6 +7,7 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+  workflow_call:
 
 jobs:
   validate-structure:
@@ -30,7 +31,7 @@ jobs:
   frontend:
     name: Frontend
     needs: validate-structure
-    uses: ./.github/workflows/frontend-ci.yml  # <-- Tambah titik di depan
+    uses: ./.github/workflows/frontend-ci.yml  
     secrets: inherit
 
   integration-test:

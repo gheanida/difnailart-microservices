@@ -4,19 +4,19 @@ import BookingService from '../services/BookingService'
 export default {
   data() {
     return {
-      services: [],  // Ganti nama dari products ke services
+      services: [],  
       loading: false,
       error: null
     }
   },
   async mounted() {
-    await this.fetchServices()  // Ganti nama method
+    await this.fetchServices()  
   },
   methods: {
     async fetchServices() {
       this.loading = true
       try {
-        // ✅ Gunakan endpoint yang benar
+
         this.services = await BookingService.getServices()
       } catch (error) {
         this.error = 'Failed to load services'
@@ -26,7 +26,7 @@ export default {
     },
     
     addToCart(service) {
-      // ... kode addToCart tetap sama
+
     }
   }
 }
